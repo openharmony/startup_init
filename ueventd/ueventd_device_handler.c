@@ -259,6 +259,22 @@ static char *FindPlatformDeviceName(char *path)
     return NULL;
 }
 
+static bool BootDeviceIsMatched(const char *parent)
+{
+    int bootDeviceNum = GetBootDeviceNum();
+    if (bootDeviceNum == 1) {
+        return STRINGEQUAL(parent, bootDevice);
+    }
+
+    char **multiBootDeviceArray = GetBootDeviceArray();
+    for (int i = 0; i < bootDeviceNum; i++) {
+        if (STRINGEQUAL(parent, multiBootDeviceArray[i])) {
+            return true;
+        }
+    }
+    return false;
+}
+
 static int BuildDeviceSymbolLinks(char **links, int linkNum, const char *parent,
     const char *partitionName, const char *deviceName)
 {
@@ -276,7 +292,7 @@ static int BuildDeviceSymbolLinks(char **links, int linkNum, const char *parent,
             "/dev/block/platform/%s/by-name/%s", parent, partitionName) == -1) {
             INIT_LOGE("Failed to build link");
         }
-        if (STRINGEQUAL(parent, bootDevice)) {
+        if (BootDeviceIsMatched(parent)) {
             num = linkNum + 1;
             links[num] = calloc(DEVICE_FILE_SIZE, sizeof(char));
             if (links[num] == NULL) {
