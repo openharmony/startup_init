@@ -845,32 +845,44 @@ INIT_LOCAL_API int CheckIfUidInGroup(const gid_t groupId, const char *groupCheck
 }
 
 #ifdef INIT_FEATURE_SUPPORT_SASPAWN
-INIT_INNER_API int UnmapResource(void)
+static void MprotectWorkSpaceArea(WorkSpace *workSpace)
+{
+    PARAM_CHECK(workSpace->area != NULL, return, "Mprotect workSpace area is null");
+
+    if (mprotect(workSpace->area, workSpace->area->dataSize, PROT_READ) == -1) {
+        PARAM_LOGE("Mprotect workSpace area failed, filename: %s", workSpace->fileName);
+    }
+}
+
+INIT_INNER_API void UnmapResource(void)
 {
     ParamWorkSpace *paramSpace = GetParamWorkSpace();
-    PARAM_CHECK(paramSpace != NULL && paramSpace->workSpace != NULL, return -1, "Invalid paramSpace or workSpace");
-    PARAM_LOGI("Unmap Resource maxSpace Count: %d", paramSpace->maxSpaceCount);
+    PARAM_CHECK(paramSpace != NULL && paramSpace->workSpace != NULL, return, "Invalid paramSpace or workSpace");
     for (uint32_t i = 0; i < paramSpace->maxSpaceCount; i++) {
         if (paramSpace->workSpace[i] != NULL) {
             WorkSpace *workSpace = GetWorkSpace(i);
-            PARAM_CHECK(workSpace != NULL, return -1, "Unmap Resource The workspace is null");
+            PARAM_CHECK(workSpace != NULL, return, "Unmap Resource The workspace is null");
             if (!PARAM_TEST_FLAG(workSpace->flags, WORKSPACE_FLAGS_INIT)) {
                 PARAM_LOGE("Workspace %u not initialized", i);
                 continue;
             }
-            PARAM_CHECK(workSpace->area != NULL, continue, "Unmap Resource The workspace area is null");
-            if (munmap(workSpace->area, workSpace->area->dataSize) != 0) {
-                PARAM_LOGE("Unmap Resource munmap failed for workspace %u", i);
-                continue;
+
+            if (PARAM_TEST_FLAG(workSpace->flags, WORKSPACE_FLAGS_FOR_CACHED)) {
+                MprotectWorkSpaceArea(workSpace);
+            } else {
+                CloseWorkSpace(workSpace);
+                PARAM_CLEAR_FLAG(workSpace->flags, WORKSPACE_FLAGS_INIT);
             }
-            workSpace->area = NULL;
         }
     }
-    PARAM_LOGI("Unmap Resource finish");
+
+    paramSpace->flags = 0;
+    paramSpace->maxLabelIndex = 0;
+    paramSpace->maxSpaceCount = 0;
+
     PARAM_WORKSPACE_OPS ops = {0};
     ops.updaterMode = 0;
     InitParamWorkSpace(1, &ops);
-    PARAM_LOGI("init param workspace again");
-    return 0;
+    PARAM_LOGV("init param workspace again");
 }
 #endif

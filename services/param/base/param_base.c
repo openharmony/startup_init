@@ -601,9 +601,7 @@ STATIC_INLINE ParamTrieNode *BaseFindTrieNode(WorkSpace *workSpace,
 
 CachedHandle CachedParameterCreate(const char *name, const char *defValue)
 {
-    if (name == NULL || defValue == NULL) {
-        return NULL;
-    }
+    PARAM_CHECK(name != NULL && defValue != NULL, return NULL, "Illegal param value");
     PARAM_WORKSPACE_CHECK(GetParamWorkSpace(), return NULL, "Invalid param workspace");
     uint32_t nameLen = strlen(name);
     PARAM_CHECK(nameLen < PARAM_NAME_LEN_MAX, return NULL, "Invalid name %s", name);
@@ -649,6 +647,7 @@ CachedHandle CachedParameterCreate(const char *name, const char *defValue)
             return NULL, "Failed to copy name %s", name);
     }
     param->spaceCommitId = ATOMIC_UINT64_LOAD_EXPLICIT(&workspace->area->commitId, MEMORY_ORDER_ACQUIRE);
+    PARAM_SET_FLAG(workspace->flags, WORKSPACE_FLAGS_FOR_CACHED);
     PARAM_LOGV("CachedParameterCreate %u %u %lld \n", param->dataIndex, param->dataCommitId, param->spaceCommitId);
     return (CachedHandle)param;
 }

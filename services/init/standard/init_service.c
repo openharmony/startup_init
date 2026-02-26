@@ -156,6 +156,8 @@ int InitServiceBySaspawn(Service *service, const ServiceArgs *pathArgs)
             INIT_LOGE("saspawn dlsym error: %s", dlerror());
             return SERVICE_FAILURE;
         }
+
+        UnmapResource();
         int argvValue = pathArgs->count - 1;
         ret = startSA(argvValue, pathArgs->argv);
         INIT_LOGI("saspawn complete, ret = %d", ret);
