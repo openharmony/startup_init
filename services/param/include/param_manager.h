@@ -168,7 +168,7 @@ INIT_LOCAL_API void CloseParamWorkSpace(void);
 INIT_LOCAL_API int CheckIfUidInGroup(const gid_t groupId, const char *groupCheckName);
 
 #ifdef INIT_FEATURE_SUPPORT_SASPAWN
-INIT_INNER_API int UnmapResource(void);
+INIT_INNER_API void UnmapResource(void);
 #endif
 #ifdef STARTUP_INIT_TEST
 ParamService *GetParamService();
