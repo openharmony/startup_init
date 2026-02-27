@@ -69,6 +69,7 @@ typedef enum SUBYSTEM {
 #define PROCESS_NAME_MAX_LENGTH 1024
 #define UEVENTD_POLL_TIME (5 * 60 * 1000)
 #define UEVENTD_FLAG "/dev/.ueventd_trigger_done"
+#define MAX_MULTI_BOOT_DEVICE 8
 
 extern char bootDevice[CMDLINE_VALUE_LEN_MAX];
 typedef int (* CompareUevent)(struct Uevent *uevent);
@@ -80,6 +81,8 @@ void RetriggerDmUeventByPath(int sockFd, char *path, char **devices, int num);
 void RetriggerSpecialUevent(int sockFd, char *path, char **devices, int num, CompareUevent compare);
 void ProcessUevent(int sockFd, char **devices, int num, CompareUevent compare);
 void CloseUeventConfig(void);
+char **GetBootDeviceArray(void);
+int GetBootDeviceNum(void);
 #ifdef __cplusplus
 #if __cplusplus
 }
