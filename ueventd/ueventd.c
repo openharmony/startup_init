@@ -37,9 +37,6 @@
 // buffer size refer to kernel kobject uevent
 #define UEVENT_BUFFER_SIZE (2048 + 1)
 char bootDevice[CMDLINE_VALUE_LEN_MAX] = { 0 };
-char bootDeviceCopy[CMDLINE_VALUE_LEN_MAX] = { 0 };
-static char *g_multiBootDevice[MAX_MULTI_BOOT_DEVICE];
-static int g_bootDeviceNum = 0;
 #define WRITE_SIZE 4
 
 static const char *actions[] = {
@@ -191,8 +188,6 @@ static void HandleRequiredBlockDeviceNodes(const struct Uevent *uevent, char **d
         } else if (strstr(devices[i], uevent->partitionName) != NULL ||
             strstr(uevent->partitionName, "vendor") != NULL ||
             strstr(uevent->partitionName, "system") != NULL ||
-            strstr(uevent->partitionName, "sys_prod") != NULL ||
-            strstr(uevent->partitionName, "chip_prod") != NULL ||
             strstr(uevent->partitionName, "chipset") != NULL ||
             strstr(uevent->partitionName, "boot") != NULL ||
             strstr(uevent->partitionName, "ramdisk") != NULL ||
@@ -404,29 +399,7 @@ void RetriggerUevent(int sockFd, char **devices, int num)
 {
     int ret = GetParameterFromCmdLine("default_boot_device", bootDevice, CMDLINE_VALUE_LEN_MAX);
     INIT_CHECK_ONLY_ELOG(ret == 0, "Failed get default_boot_device value from cmdline");
-
-    if (strcpy_s(bootDeviceCopy, CMDLINE_VALUE_LEN_MAX, bootDevice) != EOK) {
-        INIT_LOGE("strcpy_s in failed!\n");
-        return;
-    }
-    g_bootDeviceNum = SplitString(bootDeviceCopy, ",", g_multiBootDevice, MAX_MULTI_BOOT_DEVICE);
-    if (g_bootDeviceNum <= 0) {
-        INIT_LOGE("SplitString boot device in failed!\n");
-        return;
-    }
-    INIT_LOGI("total boot device num is : %d\n", g_bootDeviceNum);
-
     Trigger("/sys/block", sockFd, devices, num, NULL);
     Trigger("/sys/class", sockFd, devices, num, NULL);
     Trigger("/sys/devices", sockFd, devices, num, NULL);
-}
-
-int GetBootDeviceNum(void)
-{
-    return g_bootDeviceNum;
-}
-
-char **GetBootDeviceArray(void)
-{
-    return &g_multiBootDevice[0];
 }
