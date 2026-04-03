@@ -344,6 +344,7 @@ static napi_value GetSdkPatchApiVersion(napi_env env, napi_callback_info info)
 #define DISTRIBUTION_PERCENT 100
 #define API_VERSION_MAX 99
 #define API_VERSION_NUM 3
+#define API_HO_VERSION_NUM 4
 #define TARGET_OS_NAME_PART1 "Harmony"
 #define TARGET_OS_NAME_PART2 "OS"
 #define TARGET_OS_NAME TARGET_OS_NAME_PART1 TARGET_OS_NAME_PART2
@@ -376,11 +377,20 @@ static bool ParseVersionFromArg(napi_env env, napi_value arg,
         int major = 0;
         int minor = 0;
         int patch = 0;
-        int count = sscanf_s(str, "%d.%d.%d", &major, &minor, &patch);
-        if (count == API_VERSION_NUM &&  major > 0 && minor >= 0 && patch >= 0) {
-            *majorVersion = static_cast<int32_t>(major);
-            *minorVersion = static_cast<int32_t>(minor);
-            *patchVersion = static_cast<int32_t>(patch);
+        int ohVersion = 0;
+        // 先试带括号的格式
+        if (sscanf_s(str, "%d.%d.%d(%d)", &major, &minor, &patch, &ohVersion) == API_HO_VERSION_NUM) {
+            if (ohVersion < 0 || ohVersion > API_VERSION_MAX) {
+                return false;
+            }
+        } else if (sscanf_s(str, "%d.%d.%d", &major, &minor, &patch) != API_VERSION_NUM) {
+            return false;
+        }
+
+        if (major > 0 && minor >= 0 && patch >= 0) {
+            *majorVersion = major;
+            *minorVersion = minor;
+            *patchVersion = patch;
             return true;
         }
         // 其他格式（如 "8"、"5.1"、"5f.3.2"）视为非法
