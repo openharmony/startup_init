@@ -378,12 +378,20 @@ static bool ParseVersionFromArg(napi_env env, napi_value arg,
         int minor = 0;
         int patch = 0;
         int ohVersion = 0;
+        size_t nConsumed = 0; // 记录解析了多少个字符
         // 先试带括号的格式
-        if (sscanf_s(str, "%d.%d.%d(%d)", &major, &minor, &patch, &ohVersion) == API_HO_VERSION_NUM) {
-            if (ohVersion < 0 || ohVersion > API_VERSION_MAX) {
+        if (sscanf_s(str, "%d.%d.%d(%d)%n", &major, &minor, &patch, &ohVersion, &nConsumed) == API_HO_VERSION_NUM) {
+            // 检查括号后面是否还有字符（比如 "1.2.3(4)abc"）
+            if (str[nConsumed] != '\0' || ohVersion < 0 || ohVersion > API_VERSION_MAX) {
                 return false;
             }
-        } else if (sscanf_s(str, "%d.%d.%d", &major, &minor, &patch) != API_VERSION_NUM) {
+        } else if (sscanf_s(str, "%d.%d.%d%n", &major, &minor, &patch, &nConsumed) == API_VERSION_NUM) {
+            // 检查解析结束后的字符
+            const char* suffix = str + nConsumed;
+            if (*suffix != '\0') {
+                return false;
+            }
+        } else {
             return false;
         }
 
