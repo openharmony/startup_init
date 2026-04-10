@@ -178,4 +178,5 @@ sysselection:x:1080:
 mechbody:x:7811:
 ufs:x:1020:
 cloud_disk_service:x:6161:
+object_editor_service:x:7061:
 midi_server:x:1044:
