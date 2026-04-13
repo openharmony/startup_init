@@ -44,6 +44,16 @@ ohos_unittest("init_unittest") {
     debug = false
     blocklist = "./init_unittest_blocklist.txt"
   }
+  ldflags = [
+      "-Wl,--wrap=fork",
+      "-Wl,--wrap=getenv",
+      "-Wl,--wrap=memfd_create",
+      "-Wl,--wrap=fcntl",
+      "-Wl,--wrap=waitpid",
+      "-Wl,--wrap=pread",
+      "-Wl,--wrap=getuid",
+      "-Wl,--wrap=close",
+  ]
   module_out_path = "init/init"
   sources = [
     "//base/startup/init/device_info/device_info.cpp",
@@ -180,12 +190,14 @@ ohos_unittest("init_unittest") {
     "//base/startup/init/interfaces/innerkits/fs_manager/libfs_dm/include",
     "//base/startup/init/interfaces/innerkits/include/fs_manager",
     "//base/startup/init/remount/include",
+    "//base/startup/init/test/mock/libs/include",
   ]
   defines = []
 
   sources += [
     "//base/startup/init/interfaces/innerkits/fs_manager/libfs_dm/fs_dm.c",
     "//base/startup/init/interfaces/innerkits/fs_manager/libfs_dm/fs_dm_linear.c",
+    "//base/startup/init/test/mock/libs/src/func_wrapper.cpp",
   ]
   include_dirs += [
     "//base/startup/init/interfaces/innerkits/fs_manager/libfs_dm",
