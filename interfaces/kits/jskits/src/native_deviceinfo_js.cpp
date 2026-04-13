@@ -344,6 +344,7 @@ static napi_value GetSdkPatchApiVersion(napi_env env, napi_callback_info info)
 #define DISTRIBUTION_PERCENT 100
 #define API_VERSION_MAX 99
 #define API_VERSION_NUM 3
+#define API_HO_VERSION_NUM 4
 #define TARGET_OS_NAME_PART1 "Harmony"
 #define TARGET_OS_NAME_PART2 "OS"
 #define TARGET_OS_NAME TARGET_OS_NAME_PART1 TARGET_OS_NAME_PART2
@@ -376,11 +377,28 @@ static bool ParseVersionFromArg(napi_env env, napi_value arg,
         int major = 0;
         int minor = 0;
         int patch = 0;
-        int count = sscanf_s(str, "%d.%d.%d", &major, &minor, &patch);
-        if (count == API_VERSION_NUM &&  major > 0 && minor >= 0 && patch >= 0) {
-            *majorVersion = static_cast<int32_t>(major);
-            *minorVersion = static_cast<int32_t>(minor);
-            *patchVersion = static_cast<int32_t>(patch);
+        int ohVersion = 0;
+        size_t nConsumed = 0; // 记录解析了多少个字符
+        // 先试带括号的格式
+        if (sscanf_s(str, "%d.%d.%d(%d)%n", &major, &minor, &patch, &ohVersion, &nConsumed) == API_HO_VERSION_NUM) {
+            // 检查括号后面是否还有字符（比如 "1.2.3(4)abc"）
+            if (str[nConsumed] != '\0' || ohVersion < 0 || ohVersion > API_VERSION_MAX) {
+                return false;
+            }
+        } else if (sscanf_s(str, "%d.%d.%d%n", &major, &minor, &patch, &nConsumed) == API_VERSION_NUM) {
+            // 检查解析结束后的字符
+            const char* suffix = str + nConsumed;
+            if (*suffix != '\0') {
+                return false;
+            }
+        } else {
+            return false;
+        }
+
+        if (major > 0 && minor >= 0 && patch >= 0) {
+            *majorVersion = major;
+            *minorVersion = minor;
+            *patchVersion = patch;
             return true;
         }
         // 其他格式（如 "8"、"5.1"、"5f.3.2"）视为非法
