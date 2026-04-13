@@ -59,11 +59,11 @@ static int DlopenSoLibrary(const char *configFile);
 
 #define PRELINK_ADDR_NR 2
 
-static int g_prelinkMemfd = -1;
-static int g_prelinkerPid;
+INIT_STATIC int g_prelinkMemfd = -1;
+INIT_STATIC int g_prelinkerPid;
 static uint64_t g_prelinkAddr[PRELINK_ADDR_NR];
 
-static void StartPrelinker(void)
+INIT_STATIC void StartPrelinker(void)
 {
     const char *list = NULL;
     CfgFiles *files = GetCfgFiles("etc/init_prelinker_dso_list");
@@ -113,14 +113,14 @@ static void StartPrelinker(void)
     FreeCfgFiles(files);
 }
 
-static void PrelinkReady(void)
+INIT_STATIC int PrelinkWait(void)
 {
     if (g_prelinkMemfd < 0) {
-        return;
+        return -1;
     }
     if (g_prelinkerPid <= 0) {
         INIT_LOGE("no prelinker process");
-        return;
+        return -1;
     }
 
     int ws = -1;
@@ -129,13 +129,21 @@ static void PrelinkReady(void)
         INIT_LOGE("prelinker waitpid failed, errno = %d", errno);
         close(g_prelinkMemfd);
         g_prelinkMemfd = -1;
-        return;
+        return -1;
     }
     g_prelinkerPid = 0;
     if (!WIFEXITED(ws) || WEXITSTATUS(ws) != 0) {
         INIT_LOGE("prelinker execution failed, ws = %d", ws);
         close(g_prelinkMemfd);
         g_prelinkMemfd = -1;
+        return -1;
+    }
+    return 0;
+}
+
+INIT_STATIC void PrelinkReady(void)
+{
+    if (g_prelinkMemfd < 0) {
         return;
     }
 
@@ -478,6 +486,8 @@ void SystemConfig(const char *uptime)
         WaitForFile("/dev/memcg/procs", WAIT_MAX_SECOND);
     }
 
+    int prelinkWaitStatus = PrelinkWait();
+
     // load SELinux context and policy
     // Do not move position!
     PluginExecCmdByName("preLoadSelinuxPolicy", "");
@@ -513,7 +523,9 @@ void SystemConfig(const char *uptime)
 
     IsEnableSandbox();
 
-    PrelinkReady();
+    if (prelinkWaitStatus == 0) {
+        PrelinkReady();
+    }
 
     // execute init
     PostInitTriggers();

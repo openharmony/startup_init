@@ -321,6 +321,122 @@ int __wrap_NeedDoAllResize(const unsigned int fsManagerFlags)
     }
 }
 
+// start wrap fork
+static ForkFunc g_fork = NULL;
+void UpdateForkFunc(ForkFunc func)
+{
+    g_fork = func;
+}
+
+pid_t __wrap_fork(void)
+{
+    if (g_fork) {
+        return g_fork();
+    } else {
+        return __real_fork();
+    }
+}
+
+// start wrap getenv
+static GetenvFunc g_getenv = NULL;
+void UpdateGetenvFunc(GetenvFunc func)
+{
+    g_getenv = func;
+}
+
+char *__wrap_getenv(const char *name)
+{
+    if (g_getenv) {
+        return g_getenv(name);
+    } else {
+        return __real_getenv(name);
+    }
+}
+
+// start wrap memfd_create
+static MemfdCreateFunc g_memfd_create = NULL;
+void UpdateMemfdCreateFunc(MemfdCreateFunc func)
+{
+    g_memfd_create = func;
+}
+
+int __wrap_memfd_create(const char *name, unsigned flags)
+{
+    if (g_memfd_create) {
+        return g_memfd_create(name, flags);
+    } else {
+        return __real_memfd_create(name, flags);
+    }
+}
+
+// start wrap fcntl
+static FcntlFunc g_fcntl = NULL;
+static int g_fcntlFlagFilter = -1;
+void UpdateFcntlFunc(FcntlFunc func, int flagFilter)
+{
+    g_fcntl = func;
+    g_fcntlFlagFilter = flagFilter;
+}
+
+int __wrap_fcntl(int fd, int flag, unsigned long arg)
+{
+    int result;
+    if (!g_fcntl || flag == g_fcntlFlagFilter) {
+        result = __real_fcntl(fd, flag, arg);
+    } else {
+        result = g_fcntl(fd, flag, arg);
+    }
+    return result;
+}
+
+// start wrap waitpid
+static WaitpidFunc g_waitpid = NULL;
+void UpdateWaitpidFunc(WaitpidFunc func)
+{
+    g_waitpid = func;
+}
+
+pid_t __wrap_waitpid(pid_t pid, int *status, int options)
+{
+    if (g_waitpid) {
+        return g_waitpid(pid, status, options);
+    } else {
+        return __real_waitpid(pid, status, options);
+    }
+}
+
+// start wrap pread
+static PreadFunc g_pread = NULL;
+void UpdatePreadFunc(PreadFunc func)
+{
+    g_pread = func;
+}
+
+ssize_t __wrap_pread(int fd, void* const buf, size_t count, off_t offset)
+{
+    if (g_pread) {
+        return g_pread(fd, buf, count, offset);
+    } else {
+        return __real_pread(fd, buf, count, offset);
+    }
+}
+
+// start wrap getuid
+static GetuidFunc g_getuid = NULL;
+void UpdateGetuidFunc(GetuidFunc func)
+{
+    g_getuid = func;
+}
+
+uid_t __wrap_getuid(void)
+{
+    if (g_getuid) {
+        return g_getuid();
+    } else {
+        return __real_getuid();
+    }
+}
+
 #ifdef __cplusplus
 #if __cplusplus
 }
