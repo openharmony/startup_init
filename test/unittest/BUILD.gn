@@ -397,6 +397,7 @@ ohos_unittest("init_unittest") {
     "selinux:libselinux",
     "storage_service:libfscryptutils_static",
     "zlib:libz",
+    "access_token:libtokenid_sdk",
   ]
   if (defined(global_parts_info) &&
       defined(global_parts_info.security_access_token)) {
