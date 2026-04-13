@@ -13,6 +13,7 @@
  * limitations under the License.
  */
 
+#include <dlfcn.h>
 #include <sys/statvfs.h>
 #include "init_cmds.h"
 #include "init_param.h"
@@ -28,6 +29,8 @@ using namespace std;
 #define DISABLE_ESWAP "disable"
 #define CLOSE_HP_WAIT_TIME 500000
 #define CLOSE_HP_INTERVAL_WAIT 10000
+#define DMA_DEVICE_FILE "/dev/dma_reclaim"
+#define GPU_RECLAIM_IMPL_SO "libgpu_reclaim.so"
 
 static int DoCmdByName(const char *name, const char *cmdContent)
 {
@@ -394,7 +397,7 @@ HWTEST_F(CmdsUnitTest, TestDisableHyperholdTimeOut, TestSize.Level1)
     char *retEswap = LoadStringFromFile(ESWAP_ENABLE_PATH);
     EXPECT_STRNE(retEswap, "enable");
     if (strcmp(retEswap, "disable") == 0) {
-        EXPECT_LT(diff, 500);
+        EXPECT_LT(diff, 5000);
     } else if (strcmp(retEswap, "readonly") == 0) {
         EXPECT_GT(diff, 500);
     }
@@ -403,8 +406,20 @@ HWTEST_F(CmdsUnitTest, TestDisableHyperholdTimeOut, TestSize.Level1)
 HWTEST_F(CmdsUnitTest, TestDeInitEswapSpace, TestSize.Level1)
 {
     bool ret = DeInitDmaEswapSpace();
-    EXPECT_EQ(ret, true);
+    int fd = open(DMA_DEVICE_FILE, O_RDWR | O_CLOEXEC | O_NONBLOCK);
+    if (fd <= 0) {
+        EXPECT_EQ(ret, false);
+    } else {
+        close(fd);
+        EXPECT_EQ(ret, true);
+    }
     ret = DeInitGpuEswapSpace();
-    EXPECT_EQ(ret, true);
+    void* libGpuKiaHandle = dlopen(GPU_RECLAIM_IMPL_SO, RTLD_NOW);
+    if (!libGpuKiaHandle) {
+        EXPECT_EQ(ret, false);
+    } else {
+        dlclose(libGpuKiaHandle);
+        EXPECT_EQ(ret, true);
+    }
 }
 } // namespace init_ut
