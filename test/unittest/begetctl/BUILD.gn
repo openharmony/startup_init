@@ -369,6 +369,7 @@ ohos_unittest("init_begetctl_unittest") {
       "ipc:ipc_single",
       "safwk:system_ability_fwk",
       "samgr:samgr_proxy",
+      "access_token:libtokenid_sdk",
     ]
   }
 
