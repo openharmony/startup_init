@@ -1430,6 +1430,20 @@ static void MoveFrozenToThawed()
     INIT_LOGI("move frozen to thawed end, success: %d, failed: %d", successCount, failCount);
 }
 
+static void StopWorkingset(const char *workingsetPath)
+{
+    int workingsetFd = open(workingsetPath, O_RDWR | O_APPEND);
+    if (workingsetFd == -1) {
+        INIT_LOGE("open %s failed, err is %d", workingsetPath, errno);
+        return;
+    }
+
+    if (write(workingsetFd, "STOP", strlen("STOP")) < 0) {
+        INIT_LOGE("write %s failed, err is %d", workingsetPath, errno);
+    }
+    close(workingsetFd);
+}
+
 void StopAllServices(int flags, const char **exclude, int size,
     int (*filter)(const Service *service, const char **exclude, int size))
 {
@@ -1443,6 +1457,8 @@ void StopAllServices(int flags, const char **exclude, int size,
     }
     INIT_LOGI("stop appspawn end");
     MoveFrozenToThawed();
+    StopWorkingset("/dev/workingset/monitor0/workingset.state");
+    StopWorkingset("/dev/workingset/monitor1/workongset.state");
     InitGroupNode *node = GetNextGroupNode(NODE_TYPE_SERVICES, NULL);
     while (node != NULL) {
         Service *service = node->data.service;
