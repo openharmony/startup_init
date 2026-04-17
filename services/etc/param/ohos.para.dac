@@ -43,6 +43,8 @@ const.postinstall.fstab.prefix = root:root:0775
 const.secure = root:root:0775
 const.allow.mock.location   = root:root:0775
 persist.sys.usb.config  = root:root:0775
+persist.init.time.boot  = root:root:0775
+persist.init.time.shutdown  = root:root:0775
 
 #permission for system
 persist.window.boot. = root:system:0775
