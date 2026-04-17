@@ -39,3 +39,5 @@ const.product.build.date=default
 const.product.hardwareprofile=default
 const.ohos.buildroothash=default
 persist.startup.bootcount=0
+persist.init.time.boot=0
+persist.init.time.shutdown=0
