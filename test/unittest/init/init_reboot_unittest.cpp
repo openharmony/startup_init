@@ -171,4 +171,10 @@ HWTEST_F(InitRebootUnitTest, TestAbnormalReboot, TestSize.Level1)
     ret = DoRebootOther(0, nullptr, 0, nullptr);
     EXPECT_EQ(ret, -1);
 }
+
+HWTEST_F(InitRebootUnitTest, TestRebootAddon, TestSize.Level1)
+{   
+ 	int ret = RebootAddon(nullptr, 0, nullptr);
+ 	EXPECT_EQ(ret, 1);
+}
 } // namespace init_ut
