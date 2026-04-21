@@ -52,6 +52,7 @@
 
 #define BOOT_TRACE_COUNT_PARAM "persist.hitrace.boot_trace.count"
 #define BOOT_TRACE_ACTIVE_PARAM "debug.hitrace.boot_trace.active"
+#define BOOT_TRACE_CONST_DEBUGGABLE_PARAM "const.debuggable"
 
 #define BOOT_TRACE_REPEAT_MIN 1
 #define BOOT_TRACE_REPEAT_MAX 100
@@ -94,10 +95,12 @@ static bool SetBootTraceShellGroup(void)
         PLUGIN_LOGW("SpawnHitraceBootTrace: getgrnam(shell) failed errno:%d", errno);
         return false;
     }
+    /* getgrnam() uses static storage; copy gid now before next lookup overwrites it. */
     gid_t shellGid = shellGroup->gr_gid;
+    gid_t gids[] = { shellGid };
     endgrent();
-    if (setgroups(1, &shellGid) != 0) {
-        PLUGIN_LOGW("SpawnHitraceBootTrace: setgroups shell gid=%u failed errno:%d", shellGid, errno);
+    if (setgroups(sizeof(gids) / sizeof(gids[0]), gids) != 0) {
+        PLUGIN_LOGW("SpawnHitraceBootTrace: setgroups shell failed errno:%d", errno);
         return false;
     }
     return true;
@@ -114,6 +117,19 @@ static bool IsBootTraceActiveOn(void)
     return strcmp(active, "1") == 0;
 }
 
+/* Match hitrace IsRootVersion / const.debuggable: only "1" allows boot_trace capture from init. */
+static bool IsBootTraceConstDebuggableOn(void)
+{
+    char value[PARAM_VALUE_LEN_MAX] = {0};
+    uint32_t len = PARAM_VALUE_LEN_MAX;
+    int ret = SystemReadParam(BOOT_TRACE_CONST_DEBUGGABLE_PARAM, value, &len);
+    if (ret != 0 || len == 0) {
+        return false;
+    }
+    return strcmp(value, "1") == 0;
+}
+
+/* Align with hitrace IsTraceMounted: trace_marker must exist before OpenTrace can succeed. */
 static bool IsTraceModeOpen(void)
 {
     char enabled[PARAM_VALUE_LEN_MAX] = {0};
@@ -152,7 +168,6 @@ static bool SpawnHitraceBootTrace(void)
         PLUGIN_LOGE("SpawnHitraceBootTrace: fork failed, errno:%d", errno);
         return false;
     }
-    PLUGIN_LOGI("SpawnHitraceBootTrace: forked child pid=%d", pid);
     return true;
 }
 
@@ -566,6 +581,10 @@ static void TryRunBootTraceByCount(void)
         PLUGIN_LOGI("boot_trace skip: %s already active", BOOT_TRACE_ACTIVE_PARAM);
         return;
     }
+    if (!IsBootTraceConstDebuggableOn()) {
+        PLUGIN_LOGI("boot_trace skip: %s is not 1 (non-debuggable image)", BOOT_TRACE_CONST_DEBUGGABLE_PARAM);
+        return;
+    }
     int count = (int)countLong;
     char newVal[PARAM_VALUE_LEN_MAX];
     if (sprintf_s(newVal, sizeof(newVal), "%d", count - 1) <= 0) {
@@ -575,13 +594,9 @@ static void TryRunBootTraceByCount(void)
         PLUGIN_LOGE("boot_trace: write %s failed", BOOT_TRACE_COUNT_PARAM);
         return;
     }
-    if (SystemWriteParam(BOOT_TRACE_ACTIVE_PARAM, "1") != 0) {
-        PLUGIN_LOGW("boot_trace: set %s failed, continue", BOOT_TRACE_ACTIVE_PARAM);
-    }
+    /* debug.hitrace.boot_trace.active is set by hitrace boot-trace after exec (not here), so shell/manual
+     * launch does not depend on init pre-setting; duplicate instances see active==1 and exit early. */
     if (!SpawnHitraceBootTrace()) {
-        if (SystemWriteParam(BOOT_TRACE_ACTIVE_PARAM, "0") != 0) {
-            PLUGIN_LOGW("boot_trace: failed to reset %s after spawn failure", BOOT_TRACE_ACTIVE_PARAM);
-        }
         return;
     }
     PLUGIN_LOGI("boot_trace: triggered, count %d -> %d", count, count - 1);
@@ -700,7 +715,6 @@ static int InitStartBootTraceByParam(const HOOK_INFO *info, void *cookie)
 {
     (void)info;
     (void)cookie;
-    PLUGIN_LOGI("boot_trace: INIT_POST_PERSIST_PARAM_LOAD hook fired");
     TryRunBootTraceByCount();
     return 0;
 }
