@@ -107,6 +107,7 @@ int32_t WatcherManager::CheckAppWatchPermission(const std::string &keyPrefix)
         "persist.ace.trace.layout.enabled",
         "persist.ace.trace.inputevent.enabled",
         "persist.ace.performance.monitor.enabled",
+        "persist.dataclone.state",
         "persist.sys.graphic.animationscale",
         "persist.sys.arkui.animationscale",
         "persist.hdc.jdwp",
