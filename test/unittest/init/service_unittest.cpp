@@ -96,7 +96,6 @@ using namespace std;
 extern "C" {
     INIT_STATIC int GetCgroupPath(Service *service, char *buffer, uint32_t buffLen);
     INIT_STATIC void StartPrelinker(void);
-    INIT_STATIC int PrelinkWait(void);
     INIT_STATIC void PrelinkReady(void);
     void PrelinkService(const char *name);
     extern INIT_STATIC int g_prelinkMemfd;
@@ -553,65 +552,6 @@ HWTEST_F(ServiceUnitTest, TestStartPrelinker_001, TestSize.Level1)
 }
 
 /**
- * @brief PrelinkWait 分支覆盖
- *
- */
-HWTEST_F(ServiceUnitTest, TestPrelinkWait_001, TestSize.Level1)
-{
-    CloseFunc closeFunc = [](int fd) -> int { return 0; };
-    UpdateCloseFunc(closeFunc);
-
-    int bakPrelinkerPid = g_prelinkerPid;
-    int bakPrelinkMemfd = g_prelinkMemfd;
-    int prelinkWaitStatus = 0;
-    g_prelinkMemfd = -1;
-    prelinkWaitStatus = PrelinkWait();
-    EXPECT_EQ(prelinkWaitStatus, -1);
-
-    g_prelinkMemfd = 1;
-    g_prelinkerPid = -1;
-    prelinkWaitStatus = PrelinkWait();
-    EXPECT_EQ(prelinkWaitStatus, -1);
-
-    g_prelinkerPid = 1;
-    WaitpidFunc waitpidFunc = [](pid_t pid, int *status, int options) -> pid_t {
-        return -1;
-    };
-    UpdateWaitpidFunc(waitpidFunc);
-    g_prelinkMemfd = 1;
-    prelinkWaitStatus = PrelinkWait();
-    EXPECT_EQ(prelinkWaitStatus, -1);
-    EXPECT_EQ(g_prelinkMemfd, -1);
-
-    WaitpidFunc waitpidFunc2 = [](pid_t pid, int *status, int options) -> pid_t {
-        *status = 0xff00;
-        return 0;
-    };
-    UpdateWaitpidFunc(waitpidFunc2);
-    g_prelinkMemfd = 1;
-    g_prelinkerPid = 1;
-    prelinkWaitStatus = PrelinkWait();
-    EXPECT_EQ(prelinkWaitStatus, -1);
-    EXPECT_EQ(g_prelinkMemfd, -1);
-
-    WaitpidFunc waitpidFunc3 = [](pid_t pid, int *status, int options) -> pid_t {
-        *status = 0;
-        return 0;
-    };
-    UpdateWaitpidFunc(waitpidFunc3);
-    g_prelinkMemfd = 1;
-    g_prelinkerPid = 1;
-    prelinkWaitStatus = PrelinkWait();
-    EXPECT_EQ(prelinkWaitStatus, 0);
-    EXPECT_EQ(g_prelinkMemfd, 1);
-
-    UpdateCloseFunc(NULL);
-    UpdateWaitpidFunc(NULL);
-    g_prelinkerPid = bakPrelinkerPid;
-    g_prelinkMemfd = bakPrelinkMemfd;
-}
-
-/**
  * @brief PrelinkReady 分支覆盖
  *
  */
@@ -620,8 +560,38 @@ HWTEST_F(ServiceUnitTest, TestPrelinkReady_001, TestSize.Level1)
     CloseFunc closeFunc = [](int fd) -> int { return 0; };
     UpdateCloseFunc(closeFunc);
 
+    int bakPrelinkerPid = g_prelinkerPid;
     int bakPrelinkMemfd = g_prelinkMemfd;
     g_prelinkMemfd = -1;
+    PrelinkReady();
+    g_prelinkMemfd = 1;
+    g_prelinkerPid = -1;
+    PrelinkReady();
+
+    g_prelinkerPid = 1;
+    WaitpidFunc waitpidFunc = [](pid_t pid, int *status, int options) -> pid_t {
+        return -1;
+    };
+    UpdateWaitpidFunc(waitpidFunc);
+    g_prelinkMemfd = 1;
+    PrelinkReady();
+
+    WaitpidFunc waitpidFunc2 = [](pid_t pid, int *status, int options) -> pid_t {
+        *status = 0xff00;
+        return 0;
+    };
+    UpdateWaitpidFunc(waitpidFunc2);
+    g_prelinkMemfd = 1;
+    g_prelinkerPid = 1;
+    PrelinkReady();
+
+    WaitpidFunc waitpidFunc3 = [](pid_t pid, int *status, int options) -> pid_t {
+        *status = 0;
+        return 0;
+    };
+    UpdateWaitpidFunc(waitpidFunc3);
+    g_prelinkMemfd = 1;
+    g_prelinkerPid = 1;
     PrelinkReady();
 
     WriteParam("const.startup.prelink.enable", "true", NULL, LOAD_PARAM_NORMAL);
@@ -630,6 +600,7 @@ HWTEST_F(ServiceUnitTest, TestPrelinkReady_001, TestSize.Level1)
     };
     UpdateFcntlFunc(fcntlFunc, -1);
     g_prelinkMemfd = 1;
+    g_prelinkerPid = 1;
     PrelinkReady();
 
     FcntlFunc fcntlFunc2 = [](int fd, int flag, unsigned long arg) -> int {
@@ -641,6 +612,7 @@ HWTEST_F(ServiceUnitTest, TestPrelinkReady_001, TestSize.Level1)
     };
     UpdatePreadFunc(preadFunc);
     g_prelinkMemfd = 1;
+    g_prelinkerPid = 1;
     PrelinkReady();
 
     PreadFunc preadFunc2 = [](int fd, void* const buf, size_t count, off_t offset) -> ssize_t {
@@ -648,12 +620,15 @@ HWTEST_F(ServiceUnitTest, TestPrelinkReady_001, TestSize.Level1)
     };
     UpdatePreadFunc(preadFunc2);
     g_prelinkMemfd = 1;
+    g_prelinkerPid = 1;
     PrelinkReady();
     EXPECT_EQ(g_prelinkMemfd, 1);
 
     UpdateCloseFunc(NULL);
     UpdateFcntlFunc(NULL, -1);
     UpdatePreadFunc(NULL);
+    UpdateWaitpidFunc(NULL);
+    g_prelinkerPid = bakPrelinkerPid;
     g_prelinkMemfd = bakPrelinkMemfd;
 }
 
