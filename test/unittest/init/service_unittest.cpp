@@ -30,6 +30,7 @@
 #include "bootstage.h"
 #include "init_hook.h"
 #include "plugin_adapter.h"
+#include "func_wrapper.h"
 
 const char *SERVICE_INFO_JSONSTR = "{"
     "\"services\":{"
@@ -94,6 +95,12 @@ using namespace std;
 
 extern "C" {
     INIT_STATIC int GetCgroupPath(Service *service, char *buffer, uint32_t buffLen);
+    INIT_STATIC void StartPrelinker(void);
+    INIT_STATIC void PrelinkReady(void);
+    void PrelinkService(const char *name);
+    extern INIT_STATIC int g_prelinkMemfd;
+    extern INIT_STATIC int g_prelinkerPid;
+    extern int g_prelinkPrctlRet;
 }
 
 namespace init_ut {
@@ -129,7 +136,7 @@ HWTEST_F(ServiceUnitTest, case01, TestSize.Level1)
 
     ret = ServiceStart(service, &service->pathArgs);
     EXPECT_EQ(ret, 0);
-    
+
     char value[PARAM_VALUE_LEN_MAX] = {0};
     u_int32_t len = sizeof(value);
     ret = SystemGetParameter(PRE_START_KEY, value, &len);
@@ -451,51 +458,178 @@ HWTEST_F(ServiceUnitTest, TestServiceExec, TestSize.Level1)
 }
 
 /**
- * @brief 当 service name 是 foundation 时，PrelinkService 直接返回，不影响后续逻辑
+ * @brief PrelinkService 分支覆盖
  *
  */
 HWTEST_F(ServiceUnitTest, TestPrelinkService_001, TestSize.Level1)
 {
-    Service *service = (Service *)calloc(1, sizeof(Service));
-    EXPECT_NE(service, NULL);
+    /* Arrangement */
+    int bakPrelinkMemfd = g_prelinkMemfd;
+    g_prelinkMemfd = -1;
+    PrelinkService("foundation");
 
-    const char *name = "foundation";
-    uint32_t nameLen = (uint32_t)strlen(name);
-    int ret = memcpy_s(service->name, nameLen + 1, name, nameLen + 1);
-    EXPECT_GT(ret, 0);
+    g_prelinkMemfd = 1;
+    PrelinkService("foundation");
 
-    service->pathArgs.argv = (char **)malloc(sizeof(char *));
-    ASSERT_NE(service->pathArgs.argv, nullptr);
-    service->pathArgs.count = 1;
-    const char *path = "/data/init_ut/test_service_release";
-    service->pathArgs.argv[0] = strdup(path);
-    service->importance = 0;
-    ret = ServiceExec(service, &service->pathArgs);
-    EXPECT_EQ(ret, 0);
+    GetenvFunc getenvFunc = [](const char *name) -> char * { return NULL; };
+    GetuidFunc getuidFunc = []() -> uid_t {
+        return -1;
+    };
+    UpdateGetenvFunc(getenvFunc);
+    UpdateGetuidFunc(getuidFunc);
+    FcntlFunc fcntlFunc = [](int fd, int flag, unsigned long arg) -> int {
+        return -1;
+    };
+    UpdateFcntlFunc(fcntlFunc, -1);
+    PrelinkService("test_service");
+
+    FcntlFunc fcntlFunc2 = [](int fd, int flag, unsigned long arg) -> int {
+        return 0;
+    };
+
+    g_prelinkPrctlRet = -1;
+    UpdateFcntlFunc(fcntlFunc2, -1);
+    PrelinkService("test_service");
+
+    g_prelinkPrctlRet = 0;
+    PrelinkService("test_service");
+
+    UpdateFcntlFunc(NULL, -1);
+    UpdateGetuidFunc(NULL);
+    UpdateGetenvFunc(NULL);
+    EXPECT_NE(g_prelinkMemfd, 0);
+
+    g_prelinkMemfd = bakPrelinkMemfd;
 }
 
 /**
- * @brief 当 service name 不是 foundation 时，PrelinkService 会正常执行
+ * @brief StartPrelinker 分支覆盖
  *
  */
-HWTEST_F(ServiceUnitTest, TestPrelinkService_002, TestSize.Level1)
+HWTEST_F(ServiceUnitTest, TestStartPrelinker_001, TestSize.Level1)
 {
-    Service *service = (Service *)calloc(1, sizeof(Service));
-    EXPECT_NE(service, NULL);
+    CloseFunc closeFunc = [](int fd) -> int { return 0; };
+    UpdateCloseFunc(closeFunc);
 
-    const char *name = "TestPrelinkService_002";
-    uint32_t nameLen = (uint32_t)strlen(name);
-    int ret = memcpy_s(service->name, nameLen + 1, name, nameLen + 1);
-    EXPECT_GT(ret, 0);
+    MemfdCreateFunc memfdCreateFunc = [](const char *name, unsigned flags) -> int {
+        return -1;
+    };
+    UpdateMemfdCreateFunc(memfdCreateFunc);
+    StartPrelinker();
 
-    service->pathArgs.argv = (char **)malloc(sizeof(char *));
-    ASSERT_NE(service->pathArgs.argv, nullptr);
-    service->pathArgs.count = 1;
-    const char *path = "/data/init_ut/test_service_release";
-    service->pathArgs.argv[0] = strdup(path);
-    service->importance = 0;
-    ret = ServiceExec(service, &service->pathArgs);
-    EXPECT_EQ(ret, 0);
+    MemfdCreateFunc memfdCreateFunc2 = [](const char *name, unsigned flags) -> int {
+        return 1;
+    };
+    UpdateMemfdCreateFunc(memfdCreateFunc2);
+    ForkFunc forkFunc = []() -> pid_t {
+        return -1;
+    };
+    UpdateForkFunc(forkFunc);
+    StartPrelinker();
+
+    UpdateForkFunc(NULL);
+    g_prelinkPrctlRet = -1;
+    StartPrelinker();
+
+    g_prelinkPrctlRet = 0;
+    FcntlFunc fcntlFunc = [](int fd, int flag, unsigned long arg) -> int {
+        return -1;
+    };
+    UpdateFcntlFunc(fcntlFunc, -1);
+    StartPrelinker();
+
+    FcntlFunc fcntlFunc2 = [](int fd, int flag, unsigned long arg) -> int {
+        return 0;
+    };
+    UpdateFcntlFunc(fcntlFunc2, -1);
+    StartPrelinker();
+
+    UpdateCloseFunc(NULL);
+    UpdateForkFunc(NULL);
+    UpdateMemfdCreateFunc(NULL);
+    UpdateFcntlFunc(NULL, -1);
+    EXPECT_NE(g_prelinkerPid, 0);
+}
+
+/**
+ * @brief PrelinkReady 分支覆盖
+ *
+ */
+HWTEST_F(ServiceUnitTest, TestPrelinkReady_001, TestSize.Level1)
+{
+    CloseFunc closeFunc = [](int fd) -> int { return 0; };
+    UpdateCloseFunc(closeFunc);
+
+    int bakPrelinkerPid = g_prelinkerPid;
+    int bakPrelinkMemfd = g_prelinkMemfd;
+    g_prelinkMemfd = -1;
+    PrelinkReady();
+    g_prelinkMemfd = 1;
+    g_prelinkerPid = -1;
+    PrelinkReady();
+
+    g_prelinkerPid = 1;
+    WaitpidFunc waitpidFunc = [](pid_t pid, int *status, int options) -> pid_t {
+        return -1;
+    };
+    UpdateWaitpidFunc(waitpidFunc);
+    g_prelinkMemfd = 1;
+    PrelinkReady();
+
+    WaitpidFunc waitpidFunc2 = [](pid_t pid, int *status, int options) -> pid_t {
+        *status = 0xff00;
+        return 0;
+    };
+    UpdateWaitpidFunc(waitpidFunc2);
+    g_prelinkMemfd = 1;
+    g_prelinkerPid = 1;
+    PrelinkReady();
+
+    WaitpidFunc waitpidFunc3 = [](pid_t pid, int *status, int options) -> pid_t {
+        *status = 0;
+        return 0;
+    };
+    UpdateWaitpidFunc(waitpidFunc3);
+    g_prelinkMemfd = 1;
+    g_prelinkerPid = 1;
+    PrelinkReady();
+
+    WriteParam("const.startup.prelink.enable", "true", NULL, LOAD_PARAM_NORMAL);
+    FcntlFunc fcntlFunc = [](int fd, int flag, unsigned long arg) -> int {
+        return -1;
+    };
+    UpdateFcntlFunc(fcntlFunc, -1);
+    g_prelinkMemfd = 1;
+    g_prelinkerPid = 1;
+    PrelinkReady();
+
+    FcntlFunc fcntlFunc2 = [](int fd, int flag, unsigned long arg) -> int {
+        return 0;
+    };
+    UpdateFcntlFunc(fcntlFunc2, -1);
+    PreadFunc preadFunc = [](int fd, void* const buf, size_t count, off_t offset) -> ssize_t {
+        return -1;
+    };
+    UpdatePreadFunc(preadFunc);
+    g_prelinkMemfd = 1;
+    g_prelinkerPid = 1;
+    PrelinkReady();
+
+    PreadFunc preadFunc2 = [](int fd, void* const buf, size_t count, off_t offset) -> ssize_t {
+        return 0;
+    };
+    UpdatePreadFunc(preadFunc2);
+    g_prelinkMemfd = 1;
+    g_prelinkerPid = 1;
+    PrelinkReady();
+    EXPECT_EQ(g_prelinkMemfd, 1);
+
+    UpdateCloseFunc(NULL);
+    UpdateFcntlFunc(NULL, -1);
+    UpdatePreadFunc(NULL);
+    UpdateWaitpidFunc(NULL);
+    g_prelinkerPid = bakPrelinkerPid;
+    g_prelinkMemfd = bakPrelinkMemfd;
 }
 
 HWTEST_F(ServiceUnitTest, TestServiceCGroup1, TestSize.Level1)

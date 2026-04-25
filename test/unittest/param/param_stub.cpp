@@ -638,6 +638,7 @@ int __attribute__((weak))SymlinkStub(const char * oldpath, const char * newpath)
     return 0;
 }
 
+int g_prelinkPrctlRet = 0;
 int PrctlStub(int option, ...)
 {
     if (option == PR_SET_SECUREBITS) {
@@ -649,6 +650,9 @@ int PrctlStub(int option, ...)
         static int count1 = 0;
         count1++;
         return (count1 % g_testRandom == 1) ? 0 : -1;
+    }
+    if (option == HM_PR_PRELINK) {
+        return g_prelinkPrctlRet;
     }
     return 0;
 }

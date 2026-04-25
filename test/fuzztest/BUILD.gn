@@ -2583,6 +2583,7 @@ ohos_fuzztest("CheckAppWatchPermissionFuzzTest") {
     "ipc:ipc_single",
     "safwk:system_ability_fwk",
     "samgr:samgr_proxy",
+    "access_token:libtokenid_sdk",
   ]
   if (init_paramwatcher_hicollie_enable) {
     external_deps += [ "hicollie:libhicollie" ]
@@ -2641,6 +2642,7 @@ ohos_fuzztest("OnStopFuzzTest") {
     "ipc:ipc_single",
     "safwk:system_ability_fwk",
     "samgr:samgr_proxy",
+    "access_token:libtokenid_sdk",
   ]
   if (init_paramwatcher_hicollie_enable) {
     external_deps += [ "hicollie:libhicollie" ]
@@ -2691,6 +2693,7 @@ ohos_fuzztest("ProcessWatcherMessageFuzzTest") {
     "ipc:ipc_single",
     "safwk:system_ability_fwk",
     "samgr:samgr_proxy",
+    "access_token:libtokenid_sdk",
   ]
   if (init_paramwatcher_hicollie_enable) {
     external_deps += [ "hicollie:libhicollie" ]
@@ -2820,6 +2823,7 @@ ohos_fuzztest("AddRemoteWatcherFuzzTest") {
     "ipc:ipc_single",
     "safwk:system_ability_fwk",
     "samgr:samgr_proxy",
+    "access_token:libtokenid_sdk",
   ]
 
   if (init_paramwatcher_hicollie_enable) {
@@ -2872,6 +2876,7 @@ ohos_fuzztest("DelRemoteWatcherFuzzTest") {
     "ipc:ipc_single",
     "safwk:system_ability_fwk",
     "samgr:samgr_proxy",
+    "access_token:libtokenid_sdk",
   ]
   if (init_paramwatcher_hicollie_enable) {
     external_deps += [ "hicollie:libhicollie" ]
@@ -2922,6 +2927,7 @@ ohos_fuzztest("AddWatcherFuzzTest") {
     "ipc:ipc_single",
     "safwk:system_ability_fwk",
     "samgr:samgr_proxy",
+    "access_token:libtokenid_sdk",
   ]
   sources += [
     "//base/startup/init/services/param/watcher/agent/watcher.cpp",
@@ -2996,6 +3002,7 @@ ohos_fuzztest("DelWatcherFuzzTest") {
     "ipc:ipc_single",
     "safwk:system_ability_fwk",
     "samgr:samgr_proxy",
+    "access_token:libtokenid_sdk",
   ]
   if (init_paramwatcher_hicollie_enable) {
     external_deps += [ "hicollie:libhicollie" ]
@@ -3045,6 +3052,7 @@ ohos_fuzztest("RefreshWatcherFuzzTest") {
     "ipc:ipc_single",
     "safwk:system_ability_fwk",
     "samgr:samgr_proxy",
+    "access_token:libtokenid_sdk",
   ]
   if (init_paramwatcher_hicollie_enable) {
     external_deps += [ "hicollie:libhicollie" ]
@@ -3684,6 +3692,7 @@ ohos_fuzztest("SendLocalChangeFuzzTest") {
     "ipc:ipc_single",
     "safwk:system_ability_fwk",
     "samgr:samgr_proxy",
+    "access_token:libtokenid_sdk",
   ]
   if (init_paramwatcher_hicollie_enable) {
     external_deps += [ "hicollie:libhicollie" ]
@@ -3734,6 +3743,7 @@ ohos_fuzztest("AddWatcherGroupFuzzTest") {
     "ipc:ipc_single",
     "safwk:system_ability_fwk",
     "samgr:samgr_proxy",
+    "access_token:libtokenid_sdk",
   ]
   if (init_paramwatcher_hicollie_enable) {
     external_deps += [ "hicollie:libhicollie" ]
@@ -4243,6 +4253,7 @@ ohos_fuzztest("DUMPFuzzTest") {
     "ipc:ipc_single",
     "safwk:system_ability_fwk",
     "samgr:samgr_proxy",
+    "access_token:libtokenid_sdk",
   ]
   if (init_paramwatcher_hicollie_enable) {
     external_deps += [ "hicollie:libhicollie" ]
@@ -4301,6 +4312,7 @@ ohos_fuzztest("OnRemoteDiedFuzzTest") {
     "ipc:ipc_single",
     "safwk:system_ability_fwk",
     "samgr:samgr_proxy",
+    "access_token:libtokenid_sdk",
   ]
   external_deps += [
     "bounds_checking_function:libsec_static",

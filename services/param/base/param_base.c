@@ -618,8 +618,9 @@ CachedHandle CachedParameterCreate(const char *name, const char *defValue)
     PARAM_CHECK_DUMPE(ret == 0, return NULL, "Forbid to access parameter %s", name);
     PARAM_CHECK(workspace != NULL && workspace->area != NULL, return NULL, "Forbid to access parameter %s", name);
 
+    uint32_t valueBufferSize = IS_READY_ONLY(name) ? PARAM_CONST_VALUE_LEN_MAX : PARAM_VALUE_LEN_MAX;
     CachedParameter *param = (CachedParameter *)malloc(
-        sizeof(CachedParameter) + PARAM_ALIGN(nameLen) + 1 + PARAM_VALUE_LEN_MAX);
+        sizeof(CachedParameter) + PARAM_ALIGN(nameLen) + 1 + valueBufferSize);
     PARAM_CHECK(param != NULL, return NULL, "Failed to create CachedParameter for %s", name);
     ret = PARAM_STRCPY(param->data, nameLen + 1, name);
     PARAM_CHECK(ret == 0, free(param);

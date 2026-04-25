@@ -44,6 +44,16 @@ ohos_unittest("init_unittest") {
     debug = false
     blocklist = "./init_unittest_blocklist.txt"
   }
+  ldflags = [
+      "-Wl,--wrap=fork",
+      "-Wl,--wrap=getenv",
+      "-Wl,--wrap=memfd_create",
+      "-Wl,--wrap=fcntl",
+      "-Wl,--wrap=waitpid",
+      "-Wl,--wrap=pread",
+      "-Wl,--wrap=getuid",
+      "-Wl,--wrap=close",
+  ]
   module_out_path = "init/init"
   sources = [
     "//base/startup/init/device_info/device_info.cpp",
@@ -180,12 +190,14 @@ ohos_unittest("init_unittest") {
     "//base/startup/init/interfaces/innerkits/fs_manager/libfs_dm/include",
     "//base/startup/init/interfaces/innerkits/include/fs_manager",
     "//base/startup/init/remount/include",
+    "//base/startup/init/test/mock/libs/include",
   ]
   defines = []
 
   sources += [
     "//base/startup/init/interfaces/innerkits/fs_manager/libfs_dm/fs_dm.c",
     "//base/startup/init/interfaces/innerkits/fs_manager/libfs_dm/fs_dm_linear.c",
+    "//base/startup/init/test/mock/libs/src/func_wrapper.cpp",
   ]
   include_dirs += [
     "//base/startup/init/interfaces/innerkits/fs_manager/libfs_dm",
@@ -222,7 +234,24 @@ ohos_unittest("init_unittest") {
   }
 
   sources += [
-    "begetctl/begetctl_unittest.cpp",
+    # 模块化测试文件
+    "begetctl/begetctl_param_basic_test.cpp",        # param ls/get/set/wait/shell
+    "begetctl/begetctl_param_advanced_test.cpp",     # param dump/save/cd/pwd/cat
+    "begetctl/begetctl_partitionslot_test.cpp",     # partitionslot 命令
+    "begetctl/begetctl_bootchart_test.cpp",          # bootchart 命令
+    "begetctl/begetctl_dump_service_test.cpp",       # dump_service 命令
+    "begetctl/begetctl_modulectl_test.cpp",          # modulectl 命令
+    "begetctl/begetctl_service_control_test.cpp",    # service_control 命令
+    "begetctl/begetctl_loglevel_test.cpp",          # setloglevel/getloglevel
+    "begetctl/begetctl_sandbox_test.cpp",            # sandbox 命令
+    "begetctl/begetctl_reboot_test.cpp",             # reboot 命令
+    "begetctl/begetctl_dac_test.cpp",                # dac 命令
+    "begetctl/begetctl_appspawn_test.cpp",           # appspawn_time 命令
+    "begetctl/begetctl_bootevent_test.cpp",          # bootevent 命令
+    "begetctl/begetctl_misc_daemon_test.cpp",        # misc_daemon 命令
+    "begetctl/begetctl_log_test.cpp",                # set/get log 传统命令
+    "begetctl/begetctl_edge_cases_test.cpp",         # 边界条件和错误处理
+    "begetctl/begetctl_advanced_coverage_test.cpp",  # 高级覆盖率测试
     "fs_manager/erofs/erofs_common_unittest.cpp",
     "fs_manager/erofs/erofs_mount_unittest.cpp",
     "fs_manager/erofs/erofs_remount_unittest.cpp",
@@ -368,6 +397,7 @@ ohos_unittest("init_unittest") {
     "selinux:libselinux",
     "storage_service:libfscryptutils_static",
     "zlib:libz",
+    "access_token:libtokenid_sdk",
   ]
   if (defined(global_parts_info) &&
       defined(global_parts_info.security_access_token)) {

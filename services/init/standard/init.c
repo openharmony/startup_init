@@ -59,11 +59,11 @@ static int DlopenSoLibrary(const char *configFile);
 
 #define PRELINK_ADDR_NR 2
 
-static int g_prelinkMemfd = -1;
-static int g_prelinkerPid;
+INIT_STATIC int g_prelinkMemfd = -1;
+INIT_STATIC int g_prelinkerPid;
 static uint64_t g_prelinkAddr[PRELINK_ADDR_NR];
 
-static void StartPrelinker(void)
+INIT_STATIC void StartPrelinker(void)
 {
     const char *list = NULL;
     CfgFiles *files = GetCfgFiles("etc/init_prelinker_dso_list");
@@ -113,7 +113,7 @@ static void StartPrelinker(void)
     FreeCfgFiles(files);
 }
 
-static void PrelinkReady(void)
+INIT_STATIC void PrelinkReady(void)
 {
     if (g_prelinkMemfd < 0) {
         return;
@@ -414,8 +414,11 @@ int ParseCfgByPriority(const char *filePath)
         INIT_LOGE("get etc/init cfg failed");
         return -1;
     }
+
+    INIT_ERROR_CHECK(files != NULL, return -1,
+        "get etc/init cfg failed");
     INIT_ERROR_CHECK(files->paths[0] != NULL, FreeCfgFiles(files);
-        return -1, "get etc/init cfg failed");
+        return -1, "get etc/init cfg path failed");
 
     for (int i = 0; files && i < MAX_CFG_POLICY_DIRS_CNT; i++) {
         if (files->paths[i]) {
