@@ -21,7 +21,6 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <string.h>
-#include <time.h>
 #include <unistd.h>
 #include <zlib.h>
 
@@ -87,25 +86,6 @@ static TraceWorkspace *GetTraceWorkspace(void)
     return &g_traceWorkspace;
 }
 
-static bool SetBootTraceShellGroup(void)
-{
-    errno = 0;
-    struct group *shellGroup = getgrnam("shell");
-    if (shellGroup == NULL) {
-        PLUGIN_LOGW("SpawnHitraceBootTrace: getgrnam(shell) failed errno:%d", errno);
-        return false;
-    }
-    /* getgrnam() uses static storage; copy gid now before next lookup overwrites it. */
-    gid_t shellGid = shellGroup->gr_gid;
-    gid_t gids[] = { shellGid };
-    endgrent();
-    if (setgroups(sizeof(gids) / sizeof(gids[0]), gids) != 0) {
-        PLUGIN_LOGW("SpawnHitraceBootTrace: setgroups shell failed errno:%d", errno);
-        return false;
-    }
-    return true;
-}
-
 static bool IsBootTraceActiveOn(void)
 {
     char active[PARAM_VALUE_LEN_MAX] = {0};
@@ -146,22 +126,24 @@ static bool IsTraceModeOpen(void)
 
 static bool SpawnHitraceBootTrace(void)
 {
+    errno = 0;
+    struct group *shellGroup = getgrnam("shell");
+    if (shellGroup == NULL) {
+        PLUGIN_LOGW("SpawnHitraceBootTrace: getgrnam(shell) failed errno:%d", errno);
+        return false;
+    }
+    /* getgrnam() uses static storage; copy gid now before next lookup overwrites it. */
+    gid_t shellGid = shellGroup->gr_gid;
+    endgrent();
     pid_t pid = fork();
     if (pid == 0) {
-        if (!SetBootTraceShellGroup()) {
-            PLUGIN_LOGE("SpawnHitraceBootTrace: SetBootTraceShellGroup failed, abort");
-            if (SystemWriteParam(BOOT_TRACE_ACTIVE_PARAM, "0") != 0) {
-                PLUGIN_LOGW("SpawnHitraceBootTrace: failed to reset %s", BOOT_TRACE_ACTIVE_PARAM);
-            }
+        gid_t gids[] = { shellGid };
+        if (setgroups(sizeof(gids) / sizeof(gids[0]), gids) != 0) {
             _exit(EXIT_FAILURE);
         }
         /* Child transitions init -> hitrace via SELinux domain_auto_transition.
          * hitrace domain needs data_local_tmp access (developer_only policy). */
         (void)execl("/system/bin/hitrace", "hitrace", "boot-trace", (char *)NULL);
-        if (SystemWriteParam(BOOT_TRACE_ACTIVE_PARAM, "0") != 0) {
-            PLUGIN_LOGW("SpawnHitraceBootTrace: failed to reset %s after execl failure", BOOT_TRACE_ACTIVE_PARAM);
-        }
-        PLUGIN_LOGE("SpawnHitraceBootTrace: execl failed errno:%d", errno);
         _exit(EXIT_FAILURE);
     }
     if (pid < 0) {
@@ -732,6 +714,7 @@ static int InitTraceInit(void)
 static void InitTraceExit(void)
 {
     PLUGIN_LOGI("InitTraceExit executorId %d", g_executorId);
+    HookMgrDel(GetBootStageHookMgr(), INIT_POST_PERSIST_PARAM_LOAD, InitStartBootTraceByParam);
     if (g_executorId != -1) {
         RemoveCmdExecutor("init_trace", g_executorId);
     }

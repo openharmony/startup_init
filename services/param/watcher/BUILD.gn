@@ -58,6 +58,8 @@ ohos_shared_library("param_watcher") {
     "ipc:ipc_single",
     "safwk:system_ability_fwk",
     "samgr:samgr_proxy",
+    "access_token:libtokenid_sdk",
+    "ipc:ipc_single",
   ]
 
   if (init_paramwatcher_hicollie_enable) {

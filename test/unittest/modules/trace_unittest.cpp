@@ -34,6 +34,16 @@ static void ExpectSystemParamEq(const char *name, const char *expectValue)
     EXPECT_STREQ(tmp, expectValue) << "param " << name;
 }
 
+static bool IsConstDebuggableValue(const char *expectValue)
+{
+    char value[PARAM_BUFFER_SIZE] = {0};
+    uint32_t len = sizeof(value);
+    if (SystemReadParam("const.debuggable", value, &len) != 0 || len == 0) {
+        return false;
+    }
+    return strcmp(value, expectValue) == 0;
+}
+
 static const char *g_content =
     "\"KERNEL\" : ["
     "{"
@@ -220,9 +230,12 @@ HWTEST_F(TraceUnitTest, TraceTest_007, TestSize.Level1)
     EXPECT_EQ(ret, 0);
 }
 
-HWTEST_F(TraceUnitTest, TraceTest_008, TestSize.Level1)
+HWTEST_F(TraceUnitTest, TraceTest_008_ActiveOnSkipsBootTrace, TestSize.Level1)
 {
     uint32_t dataIndex = 0;
+    if (!IsConstDebuggableValue("1")) {
+        return;
+    }
     EXPECT_EQ(WriteParam("persist.hitrace.boot_trace.count", "2", &dataIndex, 0), 0);
     EXPECT_EQ(WriteParam("debug.hitrace.boot_trace.active", "1", &dataIndex, 0), 0);
 
@@ -235,6 +248,9 @@ HWTEST_F(TraceUnitTest, TraceTest_008, TestSize.Level1)
 HWTEST_F(TraceUnitTest, TraceTest_009_InitTraceOnSkipsBootTrace, TestSize.Level1)
 {
     uint32_t dataIndex = 0;
+    if (!IsConstDebuggableValue("1")) {
+        return;
+    }
     EXPECT_EQ(WriteParam("persist.init.trace.enabled", "1", &dataIndex, 0), 0);
     EXPECT_EQ(WriteParam("persist.hitrace.boot_trace.count", "3", &dataIndex, 0), 0);
     EXPECT_EQ(WriteParam("debug.hitrace.boot_trace.active", "0", &dataIndex, 0), 0);
@@ -244,5 +260,36 @@ HWTEST_F(TraceUnitTest, TraceTest_009_InitTraceOnSkipsBootTrace, TestSize.Level1
     ExpectSystemParamEq("persist.hitrace.boot_trace.count", "3");
     ExpectSystemParamEq("debug.hitrace.boot_trace.active", "0");
     (void)WriteParam("persist.init.trace.enabled", "0", &dataIndex, 0);
+}
+
+HWTEST_F(TraceUnitTest, TraceTest_010_DebuggableAndInactiveTriggersBootTrace, TestSize.Level1)
+{
+    uint32_t dataIndex = 0;
+    if (!IsConstDebuggableValue("1")) {
+        return;
+    }
+    EXPECT_EQ(WriteParam("persist.hitrace.boot_trace.count", "2", &dataIndex, 0), 0);
+    EXPECT_EQ(WriteParam("debug.hitrace.boot_trace.active", "0", &dataIndex, 0), 0);
+
+    HookMgrExecute(GetBootStageHookMgr(), INIT_POST_PERSIST_PARAM_LOAD, nullptr, nullptr);
+
+    // count is consumed once before spawn path when all trigger conditions are met.
+    ExpectSystemParamEq("persist.hitrace.boot_trace.count", "1");
+}
+
+HWTEST_F(TraceUnitTest, TraceTest_011_NonDebuggableSkipsBootTrace, TestSize.Level1)
+{
+    uint32_t dataIndex = 0;
+    if (!IsConstDebuggableValue("0")) {
+        return;
+    }
+    EXPECT_EQ(WriteParam("persist.init.trace.enabled", "0", &dataIndex, 0), 0);
+    EXPECT_EQ(WriteParam("persist.hitrace.boot_trace.count", "2", &dataIndex, 0), 0);
+    EXPECT_EQ(WriteParam("debug.hitrace.boot_trace.active", "0", &dataIndex, 0), 0);
+
+    HookMgrExecute(GetBootStageHookMgr(), INIT_POST_PERSIST_PARAM_LOAD, nullptr, nullptr);
+
+    ExpectSystemParamEq("persist.hitrace.boot_trace.count", "2");
+    ExpectSystemParamEq("debug.hitrace.boot_trace.active", "0");
 }
 } // namespace init_ut

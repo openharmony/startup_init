@@ -18,8 +18,12 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/prctl.h>
+#include <sys/mman.h>
 #include <sys/stat.h>
 #include <linux/fs.h>
+#include <unistd.h>
+#include <fcntl.h>
 #include <errno.h>
 #ifdef __cplusplus
 #if __cplusplus
@@ -111,6 +115,46 @@ void UpdateReadFunc(ReadFunc func);
 int __real_access(const char *pathname, int mode);
 typedef int (*AccessFunc)(const char *pathname, int mode);
 void UpdateAccessFunc(AccessFunc func);
+
+// for wrapper NeedDoAllResize;
+int __real_NeedDoAllResize(const unsigned int fsManagerFlags);
+typedef int (*NeedDoAllResizeFunc)(const unsigned int fsManagerFlags);
+void UpdateNeedDoAllResizeFunc(NeedDoAllResizeFunc func);
+
+// for wrapper fork;
+pid_t __real_fork(void);
+typedef pid_t (*ForkFunc)(void);
+void UpdateForkFunc(ForkFunc func);
+
+// for wrapper getenv;
+char *__real_getenv(const char *name);
+typedef char *(*GetenvFunc)(const char *name);
+void UpdateGetenvFunc(GetenvFunc func);
+
+// for wrapper memfd_create;
+int __real_memfd_create(const char *name, unsigned flags);
+typedef int (*MemfdCreateFunc)(const char *name, unsigned flags);
+void UpdateMemfdCreateFunc(MemfdCreateFunc func);
+
+// for wrapper fcntl;
+int __real_fcntl(int fd, int flag, unsigned long arg);
+typedef int (*FcntlFunc)(int fd, int flag, unsigned long arg);
+void UpdateFcntlFunc(FcntlFunc func, int flagFilter);
+
+// for wrapper waitpid;
+pid_t __real_waitpid(pid_t pid, int *status, int options);
+typedef pid_t (*WaitpidFunc)(pid_t pid, int *status, int options);
+void UpdateWaitpidFunc(WaitpidFunc func);
+
+// for wrapper pread;
+ssize_t __real_pread(int fd, void* const buf, size_t count, off_t offset);
+typedef ssize_t (*PreadFunc)(int fd, void* const buf, size_t count, off_t offset);
+void UpdatePreadFunc(PreadFunc func);
+
+// for wrapper getuid;
+uid_t __real_getuid(void);
+typedef uid_t (*GetuidFunc)(void);
+void UpdateGetuidFunc(GetuidFunc func);
 
 #ifdef __cplusplus
 #if __cplusplus

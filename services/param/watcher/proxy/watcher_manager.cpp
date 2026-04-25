@@ -26,6 +26,8 @@
 #include "system_ability_definition.h"
 #include "string_ex.h"
 #include "watcher_utils.h"
+#include "tokenid_kit.h"
+#include "ipc_skeleton.h"
 
 namespace OHOS {
 namespace init_param {
@@ -105,6 +107,7 @@ int32_t WatcherManager::CheckAppWatchPermission(const std::string &keyPrefix)
         "persist.ace.trace.layout.enabled",
         "persist.ace.trace.inputevent.enabled",
         "persist.ace.performance.monitor.enabled",
+        "persist.dataclone.state",
         "persist.sys.graphic.animationscale",
         "persist.sys.arkui.animationscale",
         "persist.hdc.jdwp",
@@ -139,10 +142,14 @@ int32_t WatcherManager::AddWatcher(const std::string &keyPrefix, uint32_t remote
     // check calling uid, app not have watch permission
     int uid = GetCallingUid();
     if (uid >= PUBLIC_APP_BEGIN_UID && !CheckAppWatchPermission(keyPrefix)) {
-        WATCHER_LOGE("app not have permission watch param:%s uid:%d pid:%d", keyPrefix.c_str(), uid, GetCallingPid());
-        return -1;
+        uint64_t tokenId = IPCSkeleton::GetCallingTokenID();
+        WATCHER_LOGV("GetCallingTokenID: %llu", tokenId);
+        bool isSys = Security::AccessToken::TokenIdKit::IsSystemAppByFullTokenID(tokenId);
+        if (!isSys) {
+            WATCHER_LOGE("app no permission watch:%s uid:%d pid:%d", keyPrefix.c_str(), uid, GetCallingPid());
+            return -1;
+        }
     }
-
     auto remoteWatcher = GetRemoteWatcher(remoteWatcherId);
     WATCHER_CHECK(remoteWatcher != nullptr, return -1, "Can not find remote watcher %d", remoteWatcherId);
     WATCHER_CHECK(remoteWatcher->CheckAgent(GetCallingPid()), return 0,
