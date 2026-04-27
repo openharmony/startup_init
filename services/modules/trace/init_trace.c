@@ -16,7 +16,7 @@
 #include <inttypes.h>
 #include <limits.h>
 #include <fcntl.h>
-#include <pthread.h>
+#include <grp.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
@@ -35,7 +35,6 @@
 #include "plugin_adapter.h"
 #include "securec.h"
 
-#define MAX_SYS_FILES 11
 #define CHUNK_SIZE 65536
 #define BLOCK_SIZE 4096
 #define WAIT_MILLISECONDS 10
@@ -50,7 +49,12 @@
 #define TRACE_OUTPUT_PATH "/data/service/el0/startup/init/init_trace.log"
 #define TRACE_OUTPUT_PATH_ZIP "/data/service/el0/startup/init/init_trace.zip"
 
-#define TRACE_CMD "ohos.servicectrl.init_trace"
+#define BOOT_TRACE_COUNT_PARAM "persist.hitrace.boot_trace.count"
+#define BOOT_TRACE_ACTIVE_PARAM "debug.hitrace.boot_trace.active"
+#define BOOT_TRACE_CONST_DEBUGGABLE_PARAM "const.debuggable"
+
+#define BOOT_TRACE_REPEAT_MIN 1
+#define BOOT_TRACE_REPEAT_MAX 100
 
 // various operating paths of ftrace
 #define TRACING_ON_PATH "tracing_on"
@@ -80,6 +84,73 @@ static TraceWorkspace g_traceWorkspace = {NULL, {0}, NULL, 0, 0};
 static TraceWorkspace *GetTraceWorkspace(void)
 {
     return &g_traceWorkspace;
+}
+
+static bool IsBootTraceActiveOn(void)
+{
+    char active[PARAM_VALUE_LEN_MAX] = {0};
+    uint32_t len = PARAM_VALUE_LEN_MAX;
+    int ret = SystemReadParam(BOOT_TRACE_ACTIVE_PARAM, active, &len);
+    if (ret != 0 || len == 0) {
+        return false;
+    }
+    return strcmp(active, "1") == 0;
+}
+
+/* Match hitrace IsRootVersion / const.debuggable: only "1" allows boot_trace capture from init. */
+static bool IsBootTraceConstDebuggableOn(void)
+{
+    char value[PARAM_VALUE_LEN_MAX] = {0};
+    uint32_t len = PARAM_VALUE_LEN_MAX;
+    int ret = SystemReadParam(BOOT_TRACE_CONST_DEBUGGABLE_PARAM, value, &len);
+    if (ret != 0 || len == 0) {
+        return false;
+    }
+    return strcmp(value, "1") == 0;
+}
+
+/* Align with hitrace IsTraceMounted: trace_marker must exist before OpenTrace can succeed. */
+static bool IsTraceModeOpen(void)
+{
+    char enabled[PARAM_VALUE_LEN_MAX] = {0};
+    uint32_t len = PARAM_VALUE_LEN_MAX;
+    int ret = SystemReadParam("persist.init.trace.enabled", enabled, &len);
+    PLUGIN_LOGI("SystemReadParam persist.init.trace.enabled:%s, ret:%d", enabled, ret);
+    if (ret == 0) {
+        if (strcmp(enabled, "1") == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static bool SpawnHitraceBootTrace(void)
+{
+    errno = 0;
+    struct group *shellGroup = getgrnam("shell");
+    if (shellGroup == NULL) {
+        PLUGIN_LOGW("SpawnHitraceBootTrace: getgrnam(shell) failed errno:%d", errno);
+        return false;
+    }
+    /* getgrnam() uses static storage; copy gid now before next lookup overwrites it. */
+    gid_t shellGid = shellGroup->gr_gid;
+    endgrent();
+    pid_t pid = fork();
+    if (pid == 0) {
+        gid_t gids[] = { shellGid };
+        if (setgroups(sizeof(gids) / sizeof(gids[0]), gids) != 0) {
+            _exit(EXIT_FAILURE);
+        }
+        /* Child transitions init -> hitrace via SELinux domain_auto_transition.
+         * hitrace domain needs data_local_tmp access (developer_only policy). */
+        (void)execl("/system/bin/hitrace", "hitrace", "boot-trace", (char *)NULL);
+        _exit(EXIT_FAILURE);
+    }
+    if (pid < 0) {
+        PLUGIN_LOGE("SpawnHitraceBootTrace: fork failed, errno:%d", errno);
+        return false;
+    }
+    return true;
 }
 
 static char *ReadFile(const char *path)
@@ -193,7 +264,7 @@ static bool SetTraceEnabled(const char *path, bool enabled)
 static bool SetBufferSize(int bufferSize)
 {
     if (!WriteStrToFile(TRACE_CURRENT_TRACER, "nop")) {
-        PLUGIN_LOGE("%s", "Error: write \"nop\" to %s\n", TRACE_CURRENT_TRACER);
+        PLUGIN_LOGE("Error: write \"nop\" to %s", TRACE_CURRENT_TRACER);
     }
     char buffer[20] = {0}; // 20 max int number
     int len = sprintf_s((char *)buffer, sizeof(buffer), "%d", bufferSize);
@@ -222,7 +293,7 @@ static bool SetTraceTagsEnabled(uint64_t tags)
     TraceWorkspace *workspace = GetTraceWorkspace();
     PLUGIN_CHECK(workspace != NULL, return false, "Failed to get trace workspace");
     int len = sprintf_s((char *)workspace->buffer, sizeof(workspace->buffer), "%" PRIu64 "", tags);
-    PLUGIN_CHECK(len > 0, return false, "Failed to format tags %" PRId64 "", tags);
+    PLUGIN_CHECK(len > 0, return false, "Failed to format tags %" PRIu64 "", tags);
     return SystemWriteParam(TRACE_TAG_PARAMETER, workspace->buffer) == 0;
 }
 
@@ -255,7 +326,7 @@ static bool SetUserSpaceSettings(void)
         int tag = cJSON_GetNumberValue(cJSON_GetObjectItem(item, "tag"));
         enabledTags |= 1ULL << tag;
     }
-    PLUGIN_LOGI("User enabledTags: %" PRId64 "", enabledTags);
+    PLUGIN_LOGI("User enabledTags: %" PRIu64 "", enabledTags);
     return SetTraceTagsEnabled(enabledTags) && RefreshServices();
 }
 
@@ -462,6 +533,57 @@ static bool MarkOthersClockSync(void)
     return true;
 }
 
+/* If persist.hitrace.boot_trace.count is 1~100, consume once and spawn hitrace boot-trace. */
+static void TryRunBootTraceByCount(void)
+{
+    if (IsTraceModeOpen()) {
+        PLUGIN_LOGI("boot_trace skip: persist.init.trace.enabled=1 (init trace on, mutually exclusive)");
+        return;
+    }
+    char buf[PARAM_VALUE_LEN_MAX] = {0};
+    uint32_t len = PARAM_VALUE_LEN_MAX;
+    int ret = SystemReadParam(BOOT_TRACE_COUNT_PARAM, buf, &len);
+    if (ret != 0 || len == 0) {
+        PLUGIN_LOGI("boot_trace skip: read %s failed ret:%d", BOOT_TRACE_COUNT_PARAM, ret);
+        return;
+    }
+    errno = 0;
+    char *endPtr = NULL;
+    long countLong = strtol(buf, &endPtr, 10);
+    if (endPtr == buf || *endPtr != '\0' || errno == ERANGE) {
+        PLUGIN_LOGI("boot_trace skip: invalid count string");
+        return;
+    }
+    if (countLong < BOOT_TRACE_REPEAT_MIN || countLong > BOOT_TRACE_REPEAT_MAX) {
+        PLUGIN_LOGI("boot_trace skip: count=%ld out of [%d,%d]", countLong,
+            BOOT_TRACE_REPEAT_MIN, BOOT_TRACE_REPEAT_MAX);
+        return;
+    }
+    if (IsBootTraceActiveOn()) {
+        PLUGIN_LOGI("boot_trace skip: %s already active", BOOT_TRACE_ACTIVE_PARAM);
+        return;
+    }
+    if (!IsBootTraceConstDebuggableOn()) {
+        PLUGIN_LOGI("boot_trace skip: %s is not 1 (non-debuggable image)", BOOT_TRACE_CONST_DEBUGGABLE_PARAM);
+        return;
+    }
+    int count = (int)countLong;
+    char newVal[PARAM_VALUE_LEN_MAX];
+    if (sprintf_s(newVal, sizeof(newVal), "%d", count - 1) <= 0) {
+        return;
+    }
+    if (SystemWriteParam(BOOT_TRACE_COUNT_PARAM, newVal) != 0) {
+        PLUGIN_LOGE("boot_trace: write %s failed", BOOT_TRACE_COUNT_PARAM);
+        return;
+    }
+    /* debug.hitrace.boot_trace.active is set by hitrace boot-trace after exec (not here), so shell/manual
+     * launch does not depend on init pre-setting; duplicate instances see active==1 and exit early. */
+    if (!SpawnHitraceBootTrace()) {
+        return;
+    }
+    PLUGIN_LOGI("boot_trace: triggered, count %d -> %d", count, count - 1);
+}
+
 static int InitStartTrace(void)
 {
     TraceWorkspace *workspace = GetTraceWorkspace();
@@ -548,25 +670,17 @@ static int InitInterruptTrace(void)
     return 0;
 }
 
-static bool IsTraceModeOpen(void)
-{
-    char enabled[PARAM_VALUE_LEN_MAX] = {0};
-    uint32_t len = PARAM_VALUE_LEN_MAX;
-    int ret = SystemReadParam("persist.init.trace.enabled", enabled, &len);
-    PLUGIN_LOGI("SystemReadParam persist.init.trace.enabled:%s, ret:%d", enabled, ret);
-    if (ret == 0) {
-        if (strcmp(enabled, "1") == 0) {
-            return true;
-        }
-    }
-    return false;
-}
-
 static int DoInitTraceCmd(int id, const char *name, int argc, const char **argv)
 {
-    PLUGIN_CHECK(IsTraceModeOpen(), return -1, "init trace disabled");
+    (void)id;
+    (void)name;
     PLUGIN_CHECK(argc >= 1, return -1, "Invalid parameter");
     PLUGIN_LOGI("DoInitTraceCmd argc %d cmd %s", argc, argv[0]);
+    if (strcmp(argv[0], "boot_trace") == 0) {
+        TryRunBootTraceByCount();
+        return 0;
+    }
+    PLUGIN_CHECK(IsTraceModeOpen(), return -1, "init trace disabled");
     if (strcmp(argv[0], "start") == 0) {
         return InitStartTrace();
     } else if (strcmp(argv[0], "stop") == 0) {
@@ -578,18 +692,29 @@ static int DoInitTraceCmd(int id, const char *name, int argc, const char **argv)
 }
 
 static int g_executorId = -1;
+
+static int InitStartBootTraceByParam(const HOOK_INFO *info, void *cookie)
+{
+    (void)info;
+    (void)cookie;
+    TryRunBootTraceByCount();
+    return 0;
+}
+
 static int InitTraceInit(void)
 {
     if (g_executorId == -1) {
         g_executorId = AddCmdExecutor("init_trace", DoInitTraceCmd);
         PLUGIN_LOGI("InitTraceInit executorId %d", g_executorId);
     }
+    InitAddPostPersistParamLoadHook(0, InitStartBootTraceByParam);
     return 0;
 }
 
 static void InitTraceExit(void)
 {
     PLUGIN_LOGI("InitTraceExit executorId %d", g_executorId);
+    HookMgrDel(GetBootStageHookMgr(), INIT_POST_PERSIST_PARAM_LOAD, InitStartBootTraceByParam);
     if (g_executorId != -1) {
         RemoveCmdExecutor("init_trace", g_executorId);
     }
