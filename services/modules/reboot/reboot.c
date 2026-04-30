@@ -17,7 +17,6 @@
 #include <linux/reboot.h>
 #include <sys/reboot.h>
 #include <sys/syscall.h>
-#include <errno.h>
 
 #include "reboot_adp.h"
 #include "init_cmdexecutor.h"
@@ -72,7 +71,7 @@ static void ParseRebootReason(const char *name, int argc, const char **argv)
 
 __attribute__((weak)) int RebootAddon(const char *name, int argc, const char **argv)
 {
-    return ENOSYS;
+    return 1;
 }
 
 typedef enum {
@@ -187,9 +186,7 @@ PLUGIN_STATIC int DoRebootShutdown(int id, const char *name, int argc, const cha
 #endif
     ParseRebootReason(name, argc, argv);
     int ret = RebootAddon(name, argc, argv);
-    if (ret != ENOSYS && ret <= 0) {
-        return ret;
-    }
+    BEGET_CHECK(ret == 1, return ret);
     // clear misc
     (void)UpdateMiscMessage(NULL, "reboot", NULL, NULL);
     const size_t len = strlen("reboot,");
@@ -221,9 +218,7 @@ static int DoRebootUpdater(int id, const char *name, int argc, const char **argv
     int ret = UpdateMiscMessage(argv[0], "updater", "updater:", "boot_updater");
     if (ret == 0) {
         ret = RebootAddon(name, argc, argv);
-        if (ret != ENOSYS && ret <= 0) {
-            return ret;
-        }
+        BEGET_CHECK(ret == 1, return ret);
         return DoRoot_("reboot", RB_AUTOBOOT);
     }
     return ret;
@@ -301,9 +296,7 @@ PLUGIN_STATIC int DoRebootOther(int id, const char *name, int argc, const char *
     // clear misc
     (void)UpdateMiscMessage(NULL, "reboot", NULL, NULL);
     int ret = RebootAddon(name, argc, argv);
-    if (ret != ENOSYS && ret <= 0) {
-        return ret;
-    }
+    BEGET_CHECK(ret == 1, return ret);
     DoJobNow("reboot");
 #ifndef STARTUP_INIT_TEST
     ExecuteRebootOrSyscall(REBOOT_TYPE_SYSCALL_RESTART2, 0, cmd + strlen("reboot,"));
