@@ -99,6 +99,7 @@ int DoRoot_(const char *jobName, int type);
 int DoRebootShutdown(int id, const char *name, int argc, const char **argv);
 int DoRebootFlashed(int id, const char *name, int argc, const char **argv);
 int DoRebootOther(int id, const char *name, int argc, const char **argv);
+int RebootAddon(const char *name, int argc, const char **argv);
 
 //remount_overlay
 bool MntNeedRemount(const char *mnt);
