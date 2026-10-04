@@ -13,7 +13,9 @@
  * limitations under the License.
  */
 
+#include <charconv>
 #include <iostream>
+#include <string_view>
 
 #include "begetctl.h"
 #include "idevmgr_hdi.h"
@@ -22,6 +24,22 @@
 using namespace OHOS::HDI::Partitionslot::V1_0;
 using OHOS::HDI::DeviceManager::V1_0::IDeviceManager;
 static const int32_t PARTITION_ARGC = 2;
+
+static const char *INVALID_SLOT_MSG = "error: slot requires a valid integer.";
+
+static bool ParsePartitionSlot(std::string_view text, int32_t &out)
+{
+    if (text.empty()) {
+        return false;
+    }
+    int32_t value = 0;
+    auto [ptr, ec] = std::from_chars(text.data(), text.data() + text.size(), value);
+    if (ec != std::errc() || ptr != text.data() + text.size()) {
+        return false;
+    }
+    out = value;
+    return true;
+}
 
 static int LoadDevice()
 {
@@ -65,11 +83,15 @@ static int GetSuffix(BShellHandle handle, int32_t argc, char *argv[])
         BShellCmdHelp(handle, argc, argv);
         return -1;
     }
+    int32_t slot = 0;
+    if (!ParsePartitionSlot(argv[1] != nullptr ? argv[1] : "", slot)) {
+        std::cout << INVALID_SLOT_MSG << std::endl;
+        return -1;
+    }
     if (LoadDevice() != 0) {
         return -1;
     }
     std::cout << "Command: partitionslot getsuffix" << std::endl;
-    int slot = atoi(argv[1]);
     sptr<IPartitionSlot> partitionslot = IPartitionSlot::Get();
     if (partitionslot != nullptr) {
         std::string suffix = "";
@@ -86,11 +108,15 @@ static int SetActiveSlot(BShellHandle handle, int32_t argc, char *argv[])
         BShellCmdHelp(handle, argc, argv);
         return -1;
     }
+    int32_t slot = 0;
+    if (!ParsePartitionSlot(argv[1] != nullptr ? argv[1] : "", slot)) {
+        std::cout << INVALID_SLOT_MSG << std::endl;
+        return -1;
+    }
     if (LoadDevice() != 0) {
         return -1;
     }
     std::cout << "Command: partitionslot setactive" << std::endl;
-    int slot = atoi(argv[1]);
     sptr<IPartitionSlot> partitionslot = IPartitionSlot::Get();
     if (partitionslot != nullptr) {
 #ifndef STARTUP_INIT_TEST
@@ -108,11 +134,15 @@ static int SetUnbootSlot(BShellHandle handle, int32_t argc, char *argv[])
         BShellCmdHelp(handle, argc, argv);
         return -1;
     }
+    int32_t slot = 0;
+    if (!ParsePartitionSlot(argv[1] != nullptr ? argv[1] : "", slot)) {
+        std::cout << INVALID_SLOT_MSG << std::endl;
+        return -1;
+    }
     if (LoadDevice() != 0) {
         return -1;
     }
     std::cout << "Command: partitionslot setunboot" << std::endl;
-    int slot = atoi(argv[1]);
     sptr<IPartitionSlot> partitionslot = IPartitionSlot::Get();
     if (partitionslot != nullptr) {
         partitionslot->SetSlotUnbootable(slot);
